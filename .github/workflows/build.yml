@@ -41,13 +41,9 @@ jobs:
         name: VideoFrameExtractor
         path: build/Release/video_frame_extractor.exe
 
-    - name: Package for Release
-      if: startsWith(github.ref, 'refs/tags/v')
-      run: Compress-Archive -Path build/Release/video_frame_extractor.exe -DestinationPath VideoFrameExtractor.zip
-
     - name: Create GitHub Release
       if: startsWith(github.ref, 'refs/tags/v')
       uses: softprops/action-gh-release@v2
       with:
-        files: VideoFrameExtractor.zip
+        files: build/Release/video_frame_extractor.exe
         generate_release_notes: true
