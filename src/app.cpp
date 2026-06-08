@@ -256,13 +256,6 @@ void render_ui(AppState* s) {
 
     ImGui::Begin("Video Frame Extractor", nullptr, wflags);
 
-    // ── Title bar ──
-    ImGui::TextColored(ImVec4(0.3f, 0.7f, 1.0f, 1.0f), "Video Frame Extractor");
-    ImGui::SameLine(ImGui::GetWindowWidth() - 60);
-    ImGui::TextDisabled("v1.0");
-    ImGui::Separator();
-    ImGui::Spacing();
-
     // ── 1. File selection (drag area + click to browse) ──
     {
         ImGui::Text("Video File");

@@ -68,6 +68,8 @@ int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/,
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);            // fixed size
+    glfwWindowHint(GLFW_MAXIMIZED, GLFW_FALSE);
 
     g_window = glfwCreateWindow(820, 620, "Video Frame Extractor", nullptr, nullptr);
     if (!g_window) {
