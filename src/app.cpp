@@ -450,7 +450,7 @@ void render_ui(AppState* s) {
     {
         float btn_width = 140;
         float avail = ImGui::GetContentRegionAvail().x;
-        float offset = (avail - (s->extracting ? btn_width * 2 : btn_width)) * 0.5f;
+        float offset = (avail - btn_width) * 0.5f;
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offset);
 
         if (!s->extracting) {
