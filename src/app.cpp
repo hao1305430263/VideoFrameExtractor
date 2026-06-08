@@ -468,8 +468,6 @@ void render_ui(AppState* s) {
             if (ImGui::Button("Cancel", ImVec2(btn_width, 35))) {
                 s->cancel_extraction();
             }
-            ImGui::SameLine();
-            ImGui::TextDisabled("Working... %.0f%%", s->progress * 100.0f);
         }
     }
 
