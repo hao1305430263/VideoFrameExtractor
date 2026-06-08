@@ -7,6 +7,7 @@ extern "C" {
 #include <libswscale/swscale.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/error.h>
+#include <libavutil/opt.h>
 }
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -41,13 +42,20 @@ bool FrameWriter::init(AVFrame* template_frame, ImageFormat format, int quality)
             snprintf(error_, sizeof(error_), "Failed to alloc encoder");
             return false;
         }
-        dst_fmt = AV_PIX_FMT_YUVJ420P;
+        dst_fmt = AV_PIX_FMT_YUVJ444P;   // 4:4:4, no chroma subsampling → sharp
         enc_ctx_->pix_fmt = dst_fmt;
         enc_ctx_->time_base = { 1, 1 };
         enc_ctx_->width  = width_;
         enc_ctx_->height = height_;
         enc_ctx_->flags |= AV_CODEC_FLAG_QSCALE;
-        enc_ctx_->global_quality = (int)(31.0 * (100.0 - quality) / 99.0 + 0.5);
+        // Map 1-100 → FFmpeg qscale 1-31 → global_quality (MJPEG divides by FF_QP2LAMBDA=118)
+        {
+            int qp = (int)(31.0 * (100.0 - quality) / 99.0 + 0.5);
+            if (qp < 1) qp = 1;  // 1 = best, 31 = worst
+            enc_ctx_->global_quality = qp * 118;  // FF_QP2LAMBDA
+        }
+        // Optimized Huffman tables for slightly smaller file at same quality
+        av_opt_set(enc_ctx_->priv_data, "huffman", "optimal", 0);
         if (avcodec_open2(enc_ctx_, codec, nullptr) < 0) {
             snprintf(error_, sizeof(error_), "Failed to open MJPEG encoder");
             return false;
@@ -63,7 +71,7 @@ bool FrameWriter::init(AVFrame* template_frame, ImageFormat format, int quality)
         sws_ = sws_getContext(
             width_, height_, src_fmt,
             width_, height_, dst_fmt,
-            SWS_BILINEAR, nullptr, nullptr, nullptr
+            SWS_LANCZOS, nullptr, nullptr, nullptr
         );
     }
 

@@ -20,7 +20,7 @@ public:
     FrameWriter(const FrameWriter&) = delete;
     FrameWriter& operator=(const FrameWriter&) = delete;
 
-    bool init(AVFrame* template_frame, ImageFormat format, int quality = 95);
+    bool init(AVFrame* template_frame, ImageFormat format, int quality = 100);
     bool save_frame(AVFrame* frame, const char* path);
     const char* last_error() const { return error_; }
 
@@ -35,7 +35,7 @@ private:
     ImageFormat     format_    = ImageFormat::JPG;
     int             width_     = 0;
     int             height_    = 0;
-    int             quality_   = 95;
+    int             quality_   = 100;
     bool            use_stb_   = false;  // true for PNG (stb fallback)
     char            error_[256] = {};
 };

@@ -22,7 +22,7 @@ void AppState::reset() {
     start_h = start_m = start_s = 0;
     end_h = 0; end_m = 0; end_s = 5;
     interval_frames = 1;
-    img_format = 1;  // JPG default
+    img_format = 0;  // PNG default
     video_duration = 0.0;
     video_fps = 0.0;
     video_width = 0;
@@ -137,7 +137,7 @@ static void extraction_worker(AppState* s) {
 
         // Lazy-init encoder from the first valid frame
         if (!writer_ready) {
-            if (!writer.init(frame, fmt, 95)) {
+            if (!writer.init(frame, fmt, 100)) {
                 snprintf(msg_buf, sizeof(msg_buf), "Encoder error: %s", writer.last_error());
                 s->set_status(msg_buf);
                 s->extracting = false;
