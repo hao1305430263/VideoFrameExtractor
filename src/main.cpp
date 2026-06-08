@@ -71,7 +71,7 @@ int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/,
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);            // fixed size
     glfwWindowHint(GLFW_MAXIMIZED, GLFW_FALSE);
 
-    g_window = glfwCreateWindow(820, 620, "Video Frame Extractor", nullptr, nullptr);
+    g_window = glfwCreateWindow(500, 800, "Video Frame Extractor", nullptr, nullptr);
     if (!g_window) {
         glfwTerminate();
         CoUninitialize();
@@ -89,7 +89,7 @@ int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/,
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    io.IniFilename = nullptr;  // no ini file
+    io.IniFilename = nullptr;   // no ini file
 
     // Style
     ImGui::StyleColorsDark();

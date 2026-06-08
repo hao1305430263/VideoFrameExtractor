@@ -256,7 +256,7 @@ bool win32_open_folder_dialog(char* out_path, size_t out_size) {
 void render_ui(AppState* s) {
     // --- Main window (fills entire GLFW window, cannot be moved) ---
     ImGuiWindowFlags wflags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
-    ImGui::SetNextWindowSize(ImVec2(820, 620), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(500, 800), ImGuiCond_Always);
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
 
     ImGui::Begin("Video Frame Extractor", nullptr, wflags);
@@ -315,73 +315,52 @@ void render_ui(AppState* s) {
     ImGui::Separator();
     ImGui::Spacing();
 
-    // ── 2. Time range (two columns: start / end) ──
+    // ── 2. Time range (vertical layout) ──
     {
         ImGui::Text("Time Range");
         ImGui::Spacing();
 
-        // Use a table for side-by-side HH:MM:SS inputs
-        if (ImGui::BeginTable("time_range", 2,
-                              ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_BordersInnerV)) {
-            ImGui::TableSetupColumn("Start Time", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("End Time", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableHeadersRow();
+        auto time_input = [](const char* label, int* h, int* m, int* sec) {
+            ImGui::Text("%s", label);
+            ImGui::PushItemWidth(60);
+            ImGui::Text(" H"); ImGui::SameLine();
+            ImGui::InputInt("##h", h, 0, 0); ImGui::SameLine();
+            ImGui::Text(" M"); ImGui::SameLine();
+            ImGui::InputInt("##m", m, 0, 0); ImGui::SameLine();
+            ImGui::Text(" S"); ImGui::SameLine();
+            ImGui::InputInt("##s", sec, 0, 0);
+            ImGui::PopItemWidth();
+            if (*h < 0) *h = 0;
+            if (*m < 0) *m = 0; else if (*m > 59) *m = 59;
+            if (*sec < 0) *sec = 0; else if (*sec > 59) *sec = 59;
+        };
 
-            ImGui::TableNextColumn();
-            {
-                ImGui::PushItemWidth(60);
-                ImGui::Text("H"); ImGui::SameLine();
-                ImGui::InputInt("##sh", &s->start_h, 0, 0);
-                ImGui::SameLine();
-                ImGui::Text("M"); ImGui::SameLine();
-                ImGui::InputInt("##sm", &s->start_m, 0, 0);
-                ImGui::SameLine();
-                ImGui::Text("S"); ImGui::SameLine();
-                ImGui::InputInt("##ss", &s->start_s, 0, 0);
-                ImGui::PopItemWidth();
-
-                // Clamp
-                if (s->start_h < 0) s->start_h = 0;
-                if (s->start_m < 0) s->start_m = 0; else if (s->start_m > 59) s->start_m = 59;
-                if (s->start_s < 0) s->start_s = 0; else if (s->start_s > 59) s->start_s = 59;
-
-                // Quick buttons
-                ImGui::SmallButton("Jump to start"); if (ImGui::IsItemClicked()) {
-                    s->start_h = s->start_m = s->start_s = 0;
-                }
-            }
-
-            ImGui::TableNextColumn();
-            {
-                ImGui::PushItemWidth(60);
-                ImGui::Text("H"); ImGui::SameLine();
-                ImGui::InputInt("##eh", &s->end_h, 0, 0);
-                ImGui::SameLine();
-                ImGui::Text("M"); ImGui::SameLine();
-                ImGui::InputInt("##em", &s->end_m, 0, 0);
-                ImGui::SameLine();
-                ImGui::Text("S"); ImGui::SameLine();
-                ImGui::InputInt("##es", &s->end_s, 0, 0);
-                ImGui::PopItemWidth();
-
-                if (s->end_h < 0) s->end_h = 0;
-                if (s->end_m < 0) s->end_m = 0; else if (s->end_m > 59) s->end_m = 59;
-                if (s->end_s < 0) s->end_s = 0; else if (s->end_s > 59) s->end_s = 59;
-
-                ImGui::SmallButton("Jump to end"); if (ImGui::IsItemClicked()) {
-                    if (s->has_video) {
-                        int total = (int)s->video_duration;
-                        s->end_h = total / 3600;
-                        s->end_m = (total % 3600) / 60;
-                        s->end_s = total % 60;
-                    }
-                }
-            }
-
-            ImGui::EndTable();
+        // Start time
+        ImGui::PushID("start");
+        time_input("Start Time", &s->start_h, &s->start_m, &s->start_s);
+        if (ImGui::SmallButton("Jump to start")) {
+            s->start_h = s->start_m = s->start_s = 0;
         }
+        ImGui::PopID();
+
+        ImGui::Spacing();
+
+        // End time
+        ImGui::PushID("end");
+        time_input("End Time", &s->end_h, &s->end_m, &s->end_s);
+        if (ImGui::SmallButton("Jump to end")) {
+            if (s->has_video) {
+                int total = (int)s->video_duration;
+                s->end_h = total / 3600;
+                s->end_m = (total % 3600) / 60;
+                s->end_s = total % 60;
+            }
+        }
+        ImGui::PopID();
     }
 
+    ImGui::Spacing();
+    ImGui::Separator();
     ImGui::Spacing();
 
     // ── 3. Extraction settings ──
@@ -395,10 +374,10 @@ void render_ui(AppState* s) {
         if (s->interval_frames > 100000) s->interval_frames = 100000;
         ImGui::PopItemWidth();
 
-        ImGui::SameLine(ImGui::GetWindowWidth() * 0.55f);
+        ImGui::Spacing();
 
         const char* formats[] = { "PNG", "JPG" };
-        ImGui::PushItemWidth(80);
+        ImGui::PushItemWidth(120);
         ImGui::Combo("Output Format", &s->img_format, formats, 2);
         ImGui::PopItemWidth();
     }
