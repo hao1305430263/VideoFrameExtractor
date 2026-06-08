@@ -249,10 +249,10 @@ bool win32_open_folder_dialog(char* out_path, size_t out_size) {
 // ──────────────────────────────────────────────
 
 void render_ui(AppState* s) {
-    // --- Main window ---
-    ImGuiWindowFlags wflags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar;
-    ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_FirstUseEver);
+    // --- Main window (fills entire GLFW window, cannot be moved) ---
+    ImGuiWindowFlags wflags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
+    ImGui::SetNextWindowSize(ImVec2(820, 620), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
 
     ImGui::Begin("Video Frame Extractor", nullptr, wflags);
 

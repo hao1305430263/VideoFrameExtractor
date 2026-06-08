@@ -117,7 +117,7 @@ int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/,
         ImGui::NewFrame();
 
         // Disable padding/margin for full-window UI
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10, 10));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
 
         render_ui(&g_state);
