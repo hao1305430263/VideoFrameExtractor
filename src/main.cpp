@@ -104,10 +104,6 @@ int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/,
     ImGui_ImplGlfw_InitForOpenGL(g_window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
 
-    // --- Set default output directory ---
-    // Use current working directory by default
-    snprintf(g_state.output_dir, sizeof(g_state.output_dir), ".");
-
     // --- Main loop ---
     while (!glfwWindowShouldClose(g_window)) {
         glfwPollEvents();
