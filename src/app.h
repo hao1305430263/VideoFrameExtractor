@@ -17,7 +17,7 @@ struct AppState {
 
     // --- Extraction settings ---
     int interval_frames = 1; // extract one frame every N frames
-    int img_format = 0;      // 0 = PNG, 1 = JPG
+    int img_format = 1;      // 0 = PNG, 1 = JPG (default)
 
     // --- Video metadata (filled after loading) ---
     double video_duration = 0.0;

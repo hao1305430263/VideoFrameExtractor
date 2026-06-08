@@ -22,7 +22,7 @@ void AppState::reset() {
     start_h = start_m = start_s = 0;
     end_h = 0; end_m = 0; end_s = 5;
     interval_frames = 1;
-    img_format = 0;
+    img_format = 1;  // JPG default
     video_duration = 0.0;
     video_fps = 0.0;
     video_width = 0;
