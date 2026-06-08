@@ -6,9 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Dependencies
 find_package(imgui CONFIG REQUIRED)
-find_package(glfw3 CONFIG REQUIRED)
-find_package(glad CONFIG REQUIRED)
-find_package(OpenGL REQUIRED)
 find_package(FFMPEG REQUIRED)
 find_package(Stb REQUIRED)
 
@@ -21,6 +18,8 @@ set(SOURCES
     src/app.cpp
     src/decoder.cpp
     src/frame_writer.cpp
+    src/imgui_impl_dx11.cpp
+    src/imgui_impl_win32.cpp
 )
 
 set(HEADERS
@@ -45,10 +44,11 @@ target_compile_options(video_frame_extractor PRIVATE
 
 target_link_libraries(video_frame_extractor PRIVATE
     imgui::imgui
-    glfw
-    glad::glad
-    OpenGL::GL
     ${FFMPEG_LIBRARIES}
+    d3d11
+    dxgi
+    dxguid
+    d3dcompiler
 )
 
 # Windows extras
@@ -56,5 +56,6 @@ if(WIN32)
     target_link_libraries(video_frame_extractor PRIVATE
         comdlg32
         ole32
+        dwmapi
     )
 endif()
