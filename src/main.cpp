@@ -97,6 +97,10 @@ int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/,
     style.WindowRounding = 4.0f;
     style.FrameRounding = 3.0f;
 
+    // Load system Chinese font (Microsoft YaHei)
+    io.Fonts->AddFontFromFileTTF("c:/Windows/Fonts/msyh.ttc", 16.0f, nullptr,
+        io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
+
     ImGui_ImplGlfw_InitForOpenGL(g_window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
 
