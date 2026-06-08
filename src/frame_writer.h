@@ -4,11 +4,12 @@
 extern "C" {
 #endif
 #include <libavutil/frame.h>
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libswscale/swscale.h>
 #ifdef __cplusplus
 }
 #endif
-
-#include <cstdint>
 
 enum class ImageFormat {
     PNG = 0,
@@ -16,23 +17,40 @@ enum class ImageFormat {
 };
 
 /**
- * @brief Saves AVFrame pixels to image files using stb_image_write.
+ * @brief Saves AVFrame pixels to image files using FFmpeg's native encoders.
+ *
+ * Usage:
+ *   FrameWriter writer;
+ *   writer.init(frame, format);
+ *   while (...) { writer.save_frame(frame, path); }
  */
 class FrameWriter {
 public:
-    /**
-     * @brief Save a video frame as an image file.
-     * @param frame       Decoded AVFrame (any pixel format, will be converted to RGB).
-     * @param path        Output file path (must end with .png or .jpg).
-     * @param format      Target image format.
-     * @param quality     JPEG quality (1-100), ignored for PNG.
-     * @return true on success.
-     */
-    static bool save_frame(AVFrame* frame,
-                           const char* path,
-                           ImageFormat format,
-                           int quality = 95);
+    FrameWriter() = default;
+    ~FrameWriter();
+
+    FrameWriter(const FrameWriter&) = delete;
+    FrameWriter& operator=(const FrameWriter&) = delete;
+
+    /// Initialize encoder + scaler for the given frame format and output type.
+    /// Call once before save_frame(). First frame determines dimensions & pixel fmt.
+    bool init(AVFrame* template_frame, ImageFormat format, int quality = 95);
+
+    /// Save a frame as an image. init() must be called first.
+    bool save_frame(AVFrame* frame, const char* path);
+
+    /// Get last error message.
+    const char* last_error() const { return error_; }
+
 private:
-    /// Convert frame to RGB24 and return allocated buffer (must be freed with av_free).
-    static uint8_t* convert_to_rgb(AVFrame* frame, int* out_width, int* out_height);
+    AVCodecContext* enc_ctx_  = nullptr;
+    AVFrame*        enc_frame_ = nullptr;
+    SwsContext*     sws_       = nullptr;
+    AVPacket*       packet_    = nullptr;
+    ImageFormat     format_    = ImageFormat::JPG;
+    int             enc_width_  = 0;
+    int             enc_height_ = 0;
+    char            error_[256] = {};
+
+    bool encode_and_write(AVFrame* frame, const char* path);
 };

@@ -9,71 +9,127 @@ extern "C" {
 #include <libavutil/error.h>
 }
 
-// stb_image_write implementation
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
-
-uint8_t* FrameWriter::convert_to_rgb(AVFrame* frame, int* out_width, int* out_height) {
-    int width = frame->width;
-    int height = frame->height;
-
-    // Cache SwsContext — creation is expensive, reuse for all frames
-    static SwsContext* cached_sws = nullptr;
-    static int cached_width = 0, cached_height = 0;
-    static AVPixelFormat cached_fmt = AV_PIX_FMT_NONE;
-
-    if (!cached_sws || width != cached_width || height != cached_height ||
-        frame->format != cached_fmt) {
-        if (cached_sws) sws_freeContext(cached_sws);
-        cached_sws = sws_getContext(
-            width, height, (AVPixelFormat)frame->format,
-            width, height, AV_PIX_FMT_RGB24,
-            SWS_BILINEAR, nullptr, nullptr, nullptr
-        );
-        cached_width = width;
-        cached_height = height;
-        cached_fmt = (AVPixelFormat)frame->format;
-    }
-
-    if (!cached_sws) return nullptr;
-
-    // Allocate RGB buffer
-    int rgb_stride = width * 3;
-    uint8_t* rgb_data = (uint8_t*)av_malloc((size_t)rgb_stride * height);
-    if (!rgb_data) return nullptr;
-
-    // Convert
-    uint8_t* dst_planes[1] = { rgb_data };
-    int dst_strides[1] = { rgb_stride };
-
-    sws_scale(cached_sws,
-              (const uint8_t* const*)frame->data, frame->linesize,
-              0, height,
-              dst_planes, dst_strides);
-
-    *out_width = width;
-    *out_height = height;
-    return rgb_data;
+FrameWriter::~FrameWriter() {
+    if (enc_ctx_)       avcodec_free_context(&enc_ctx_);
+    if (enc_frame_)     av_frame_free(&enc_frame_);
+    if (sws_)           sws_freeContext(sws_);
+    if (packet_)        av_packet_free(&packet_);
 }
 
-bool FrameWriter::save_frame(AVFrame* frame,
-                              const char* path,
-                              ImageFormat format,
-                              int quality) {
-    if (!frame || !path) return false;
+bool FrameWriter::init(AVFrame* template_frame, ImageFormat format, int quality) {
+    format_ = format;
+    enc_width_  = template_frame->width;
+    enc_height_ = template_frame->height;
 
-    int width = 0, height = 0;
-    uint8_t* rgb_data = convert_to_rgb(frame, &width, &height);
-    if (!rgb_data) return false;
-
-    bool ok = false;
-    if (format == ImageFormat::PNG) {
-        int stride = width * 3;
-        ok = (stbi_write_png(path, width, height, 3, rgb_data, stride) != 0);
-    } else {
-        ok = (stbi_write_jpg(path, width, height, 3, rgb_data, quality) != 0);
+    // ── Pick encoder ──
+    AVCodecID codec_id = (format == ImageFormat::JPG) ? AV_CODEC_ID_MJPEG : AV_CODEC_ID_PNG;
+    const AVCodec* codec = avcodec_find_encoder(codec_id);
+    if (!codec) {
+        snprintf(error_, sizeof(error_), "Encoder not found for %s",
+                 format == ImageFormat::JPG ? "JPEG" : "PNG");
+        return false;
     }
 
-    av_free(rgb_data);
-    return ok;
+    enc_ctx_ = avcodec_alloc_context3(codec);
+    if (!enc_ctx_) {
+        snprintf(error_, sizeof(error_), "Failed to allocate encoder context");
+        return false;
+    }
+
+    // ── Determine pixel format ──
+    AVPixelFormat src_fmt = (AVPixelFormat)template_frame->format;
+    AVPixelFormat dst_fmt;
+
+    if (format == ImageFormat::JPG) {
+        // JPEG encoder works best with YUVJ420P (full-range YUV 4:2:0)
+        dst_fmt = AV_PIX_FMT_YUVJ420P;
+        enc_ctx_->pix_fmt = dst_fmt;
+        enc_ctx_->time_base = { 1, 1 };
+        enc_ctx_->width  = enc_width_;
+        enc_ctx_->height = enc_height_;
+        enc_ctx_->flags |= AV_CODEC_FLAG_QSCALE;
+        // Map quality 1-100 to FFmpeg qscale 31-1 (inverted)
+        enc_ctx_->global_quality = (int)(31.0 * (100.0 - quality) / 99.0 + 0.5);
+    } else {
+        // PNG encoder expects RGB
+        dst_fmt = AV_PIX_FMT_RGB24;
+        enc_ctx_->pix_fmt = dst_fmt;
+        enc_ctx_->time_base = { 1, 1 };
+        enc_ctx_->width  = enc_width_;
+        enc_ctx_->height = enc_height_;
+    }
+
+    if (avcodec_open2(enc_ctx_, codec, nullptr) < 0) {
+        snprintf(error_, sizeof(error_), "Failed to open encoder");
+        return false;
+    }
+
+    // ── Allocate encoder input frame ──
+    enc_frame_ = av_frame_alloc();
+    enc_frame_->format = dst_fmt;
+    enc_frame_->width  = enc_width_;
+    enc_frame_->height = enc_height_;
+    if (av_frame_get_buffer(enc_frame_, 0) < 0) {
+        snprintf(error_, sizeof(error_), "Failed to allocate encoder frame buffer");
+        return false;
+    }
+
+    // ── Scaler: source format → encoder format ──
+    if (src_fmt != dst_fmt || enc_width_ != template_frame->width || enc_height_ != template_frame->height) {
+        sws_ = sws_getContext(
+            enc_width_, enc_height_, src_fmt,
+            enc_width_, enc_height_, dst_fmt,
+            SWS_BILINEAR, nullptr, nullptr, nullptr
+        );
+    }
+
+    // ── Allocate output packet ──
+    packet_ = av_packet_alloc();
+
+    return true;
+}
+
+bool FrameWriter::encode_and_write(AVFrame* src_frame, const char* path) {
+    AVFrame* frame_to_encode = src_frame;
+
+    // Scale if needed
+    if (sws_) {
+        sws_scale(sws_,
+                  (const uint8_t* const*)src_frame->data, src_frame->linesize,
+                  0, src_frame->height,
+                  enc_frame_->data, enc_frame_->linesize);
+        frame_to_encode = enc_frame_;
+    }
+
+    // Encode
+    int ret = avcodec_send_frame(enc_ctx_, frame_to_encode);
+    if (ret < 0) {
+        av_strerror(ret, error_, sizeof(error_));
+        return false;
+    }
+
+    ret = avcodec_receive_packet(enc_ctx_, packet_);
+    if (ret < 0) {
+        av_strerror(ret, error_, sizeof(error_));
+        return false;
+    }
+
+    // Write to file
+    FILE* f = nullptr;
+    errno_t err = fopen_s(&f, path, "wb");
+    if (err != 0 || !f) {
+        snprintf(error_, sizeof(error_), "Cannot open output file: %s", path);
+        av_packet_unref(packet_);
+        return false;
+    }
+    fwrite(packet_->data, 1, packet_->size, f);
+    fclose(f);
+
+    av_packet_unref(packet_);
+    return true;
+}
+
+bool FrameWriter::save_frame(AVFrame* frame, const char* path) {
+    if (!frame || !path || !enc_ctx_) return false;
+    return encode_and_write(frame, path);
 }

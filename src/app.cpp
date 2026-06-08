@@ -120,6 +120,11 @@ static void extraction_worker(AppState* s) {
 
     char msg_buf[256];
 
+    // ── Init FFmpeg-based encoder (once, reuses cached contexts) ──
+    FrameWriter writer;
+    ImageFormat fmt = (s->img_format == 0) ? ImageFormat::PNG : ImageFormat::JPG;
+    bool writer_ready = false;
+
     AVFrame* frame = nullptr;
     while (decoder.decode_next_frame(&frame) && !s->cancel_requested) {
         AVRational tb = decoder.time_base();
@@ -130,6 +135,18 @@ static void extraction_worker(AppState* s) {
         // Stop once past end time
         if (pts >= end_sec) break;
 
+        // Lazy-init encoder from the first valid frame
+        if (!writer_ready) {
+            if (!writer.init(frame, fmt, 95)) {
+                snprintf(msg_buf, sizeof(msg_buf), "Encoder error: %s", writer.last_error());
+                s->set_status(msg_buf);
+                s->extracting = false;
+                decoder.close();
+                return;
+            }
+            writer_ready = true;
+        }
+
         // Frame-based interval: save every Nth frame
         if (decoded_count % interval == 0) {
             char filename[512];
@@ -138,8 +155,7 @@ static void extraction_worker(AppState* s) {
                      out_idx + 1,
                      s->img_format == 0 ? "png" : "jpg");
 
-            ImageFormat fmt = (s->img_format == 0) ? ImageFormat::PNG : ImageFormat::JPG;
-            if (FrameWriter::save_frame(frame, filename, fmt, 95)) {
+            if (writer.save_frame(frame, filename)) {
                 out_idx++;
                 s->progress = (float)out_idx / (float)estimated;
             } else {
