@@ -21,7 +21,7 @@ void AppState::reset() {
     output_dir[0] = '\0';
     start_h = start_m = start_s = 0;
     end_h = 0; end_m = 0; end_s = 5;
-    interval_sec = 1;
+    interval_frames = 1;
     img_format = 0;
     video_duration = 0.0;
     video_fps = 0.0;
@@ -95,22 +95,26 @@ static void extraction_worker(AppState* s) {
 
     double start_sec = s->start_h * 3600 + s->start_m * 60 + s->start_s;
     double end_sec   = s->end_h   * 3600 + s->end_m   * 60 + s->end_s;
-    double interval  = (double)s->interval_sec;
+    int    interval  = s->interval_frames;
 
     if (end_sec > decoder.info().duration_sec)
         end_sec = decoder.info().duration_sec;
 
-    if (start_sec >= end_sec || interval <= 0.0) {
+    if (start_sec >= end_sec || interval <= 0) {
         s->set_status("Invalid time range or interval");
         s->extracting = false;
         return;
     }
 
-    int total_frames = (int)((end_sec - start_sec) / interval) + 1;
-    int frame_idx = 0;
-    double next_extract_pts = start_sec;
+    // Estimate total output frames
+    double fps = decoder.info().fps;
+    double total_range_frames = (end_sec - start_sec) * fps;
+    int estimated = (int)(total_range_frames / interval) + 1;
 
-    // Seek to 1 second before start to ensure we have keyframe
+    int out_idx = 0;           // saved frame count
+    int64_t decoded_count = 0; // frames decoded since seek
+
+    // Seek to 1 second before start to reach the first keyframe
     double seek_to = start_sec > 1.0 ? start_sec - 1.0 : 0.0;
     decoder.seek(seek_to);
 
@@ -118,41 +122,42 @@ static void extraction_worker(AppState* s) {
 
     AVFrame* frame = nullptr;
     while (decoder.decode_next_frame(&frame) && !s->cancel_requested) {
-        // Compute frame PTS in seconds
         AVRational tb = decoder.time_base();
         double pts = frame->pts * av_q2d(tb);
 
-        // Skip frames before the target extraction point
-        if (pts < next_extract_pts) continue;
+        // Skip frames before the start time
+        if (pts < start_sec) continue;
+        // Stop once past end time
+        if (pts >= end_sec) break;
 
-        // Save this frame
-        char filename[512];
-        snprintf(filename, sizeof(filename), "%s\\output_%05d.%s",
-                 s->output_dir,
-                 frame_idx + 1,
-                 s->img_format == 0 ? "png" : "jpg");
+        // Frame-based interval: save every Nth frame
+        if (decoded_count % interval == 0) {
+            char filename[512];
+            snprintf(filename, sizeof(filename), "%s\\output_%05d.%s",
+                     s->output_dir,
+                     out_idx + 1,
+                     s->img_format == 0 ? "png" : "jpg");
 
-        ImageFormat fmt = (s->img_format == 0) ? ImageFormat::PNG : ImageFormat::JPG;
-        if (FrameWriter::save_frame(frame, filename, fmt, 95)) {
-            frame_idx++;
-            s->progress = (float)frame_idx / (float)total_frames;
-        } else {
-            snprintf(msg_buf, sizeof(msg_buf), "Failed to save frame %d: %s",
-                     frame_idx + 1, filename);
-            s->set_status(msg_buf);
+            ImageFormat fmt = (s->img_format == 0) ? ImageFormat::PNG : ImageFormat::JPG;
+            if (FrameWriter::save_frame(frame, filename, fmt, 95)) {
+                out_idx++;
+                s->progress = (float)out_idx / (float)estimated;
+            } else {
+                snprintf(msg_buf, sizeof(msg_buf), "Failed to save frame %d: %s",
+                         out_idx + 1, filename);
+                s->set_status(msg_buf);
+            }
         }
 
-        next_extract_pts = start_sec + frame_idx * interval;
-
-        if (pts >= end_sec) break;
+        decoded_count++;
     }
 
     decoder.close();
 
     if (s->cancel_requested) {
-        snprintf(msg_buf, sizeof(msg_buf), "Cancelled — extracted %d frames", frame_idx);
+        snprintf(msg_buf, sizeof(msg_buf), "Cancelled — extracted %d frames", out_idx);
     } else {
-        snprintf(msg_buf, sizeof(msg_buf), "Done — %d frames saved to %s", frame_idx, s->output_dir);
+        snprintf(msg_buf, sizeof(msg_buf), "Done — %d frames saved to %s", out_idx, s->output_dir);
     }
     s->set_status(msg_buf);
     s->extracting = false;
@@ -385,9 +390,9 @@ void render_ui(AppState* s) {
         ImGui::Spacing();
 
         ImGui::PushItemWidth(100);
-        ImGui::InputInt("Extract one frame every (seconds)", &s->interval_sec, 1, 5);
-        if (s->interval_sec < 1) s->interval_sec = 1;
-        if (s->interval_sec > 3600) s->interval_sec = 3600;
+        ImGui::InputInt("Extract one frame every (frames)", &s->interval_frames, 1, 5);
+        if (s->interval_frames < 1) s->interval_frames = 1;
+        if (s->interval_frames > 100000) s->interval_frames = 100000;
         ImGui::PopItemWidth();
 
         ImGui::SameLine(ImGui::GetWindowWidth() * 0.55f);
@@ -426,8 +431,8 @@ void render_ui(AppState* s) {
     {
         int start_sec = s->start_h * 3600 + s->start_m * 60 + s->start_s;
         int end_sec   = s->end_h   * 3600 + s->end_m   * 60 + s->end_s;
-        if (end_sec > start_sec && s->interval_sec > 0) {
-            int estimated = (end_sec - start_sec) / s->interval_sec + 1;
+        if (end_sec > start_sec && s->interval_frames > 0 && s->video_fps > 0) {
+            int estimated = (int)((end_sec - start_sec) * s->video_fps / s->interval_frames) + 1;
             ImGui::TextDisabled("Estimated: %d frame(s)  |  Range: %02d:%02d:%02d → %02d:%02d:%02d",
                                estimated,
                                s->start_h, s->start_m, s->start_s,
